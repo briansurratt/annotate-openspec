@@ -7,10 +7,10 @@
 
 ## 2. Queue Package Scaffold
 
-- [ ] 2.1 Create `internal/queue/queue.go` with the `Queue` struct holding `*sql.DB` and four `*sql.Stmt` fields
-- [ ] 2.2 Write a failing test for `queue.New(db)` — asserts non-nil return and no error with a valid in-memory test DB
-- [ ] 2.3 Implement `queue.New(db *sql.DB) (*Queue, error)` — prepare all four statements, return error on any failure
-- [ ] 2.4 Verify construction tests pass; commit
+- [x] 2.1 Create `internal/queue/queue.go` with the `Queue` struct holding `*sql.DB` and four `*sql.Stmt` fields
+- [x] 2.2 Write a failing test for `queue.New(db)` — asserts non-nil return and no error with a valid in-memory test DB
+- [x] 2.3 Implement `queue.New(db *sql.DB) (*Queue, error)` — prepare all four statements, return error on any failure
+- [x] 2.4 Verify construction tests pass; commit
 
 ## 3. Enqueue
 
