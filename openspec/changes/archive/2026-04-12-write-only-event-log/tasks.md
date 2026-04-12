@@ -23,4 +23,4 @@
 
 ## 5. Commit
 
-- [ ] 5.1 Commit all changes with message: `feat(eventlog): implement write-only event log (M1.6)`
+- [x] 5.1 Commit all changes with message: `feat(eventlog): implement write-only event log (M1.6)`
