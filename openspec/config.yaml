@@ -3,18 +3,23 @@ schema: spec-driven
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: Go 1.21+, SQLite, Cobra CLI, YAML
+  Module: github.com/briansurratt/annotate
+  Domain: AI-powered annotation daemon for local markdown notes
+
+  Coding standards: docs/coding-standards.md
+  Key rules:
+  - TDD mandatory: write failing test first, then implement (red → green → refactor)
+  - All errors handled explicitly; wrap with fmt.Errorf("context: %w", err)
+  - Follow Effective Go naming conventions (PascalCase exports, camelCase locals, -er interfaces)
+  - Database operations in internal/store only; use prepared statements; atomic migrations
+  - Atomic file writes: write to .tmp then os.Rename()
+  - One incremental git commit per completed task
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  tasks:
+    - Order tasks TDD-style: write test task before implementation task for each feature
+    - Tasks should be small enough to complete in one focused session

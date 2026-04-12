@@ -52,6 +52,8 @@ Implement tasks from an OpenSpec change.
    - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
+   Also always read `docs/coding-standards.md` from the project root — it applies to every implementation regardless of schema.
+
 5. **Show current progress**
 
    Display:
