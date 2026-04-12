@@ -263,8 +263,8 @@ func TestEventLogTableColumns(t *testing.T) {
 	defer s.Close()
 
 	_, err = s.db.ExecContext(context.Background(),
-		`INSERT INTO event_log (event_type, file_path, details) VALUES (?, ?, ?)`,
-		"saved", "/notes/foo.md", "{}",
+		`INSERT INTO event_log (event_type, file_path, details, timestamp) VALUES (?, ?, ?, ?)`,
+		"saved", "/notes/foo.md", "{}", int64(1704067200000000000),
 	)
 	if err != nil {
 		t.Errorf("insert into event_log: %v", err)
@@ -285,6 +285,56 @@ func TestIndexCacheTableColumns(t *testing.T) {
 	)
 	if err != nil {
 		t.Errorf("insert into index_cache: %v", err)
+	}
+}
+
+// TestEventLogTableSchema asserts the event_log table has the exact column types,
+// NOT NULL constraints, and default for details required by the event-log spec.
+func TestEventLogTableSchema(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(context.Background(), filepath.Join(dir, "db.sqlite"), nil)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	// details DEFAULT '{}' — insert without specifying details and verify default value.
+	res, err := s.db.ExecContext(context.Background(),
+		`INSERT INTO event_log (event_type, file_path, timestamp) VALUES (?, ?, ?)`,
+		"saved", "/notes/test.md", int64(1704067200000000000),
+	)
+	if err != nil {
+		t.Fatalf("insert without details: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	var details string
+	if err := s.db.QueryRowContext(context.Background(),
+		`SELECT details FROM event_log WHERE id = ?`, id,
+	).Scan(&details); err != nil {
+		t.Fatalf("query details: %v", err)
+	}
+	if details != "{}" {
+		t.Errorf("default details = %q, want %q", details, "{}")
+	}
+
+	// timestamp must accept INTEGER (nanoseconds).
+	var ts int64
+	if err := s.db.QueryRowContext(context.Background(),
+		`SELECT timestamp FROM event_log WHERE id = ?`, id,
+	).Scan(&ts); err != nil {
+		t.Fatalf("query timestamp: %v", err)
+	}
+	if ts != int64(1704067200000000000) {
+		t.Errorf("timestamp = %d, want %d", ts, int64(1704067200000000000))
+	}
+
+	// idx_event_log_timestamp must exist.
+	var idxName string
+	if err := s.db.QueryRowContext(context.Background(),
+		`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_event_log_timestamp'`,
+	).Scan(&idxName); err != nil {
+		t.Errorf("index idx_event_log_timestamp not found: %v", err)
 	}
 }
 
