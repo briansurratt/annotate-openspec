@@ -70,7 +70,8 @@ func TestRunMigrations_IndexesCreated(t *testing.T) {
 	defer s.Close()
 
 	indexes := []string{
-		"idx_queue_file_path",
+		"idx_queue_file_path_pending",
+		"idx_queue_status_position",
 		"idx_event_log_timestamp",
 		"idx_metrics_name",
 	}
@@ -114,8 +115,8 @@ func TestSchemaVersions_RecordsAllMigrations(t *testing.T) {
 		t.Fatalf("SchemaVersions() error = %v", err)
 	}
 
-	// We ship 7 migration files; all should be recorded.
-	const expectedCount = 7
+	// We ship 10 migration files; all should be recorded.
+	const expectedCount = 10
 	if len(versions) != expectedCount {
 		t.Errorf("len(SchemaVersions()) = %d, want %d", len(versions), expectedCount)
 	}
@@ -153,6 +154,72 @@ func TestRollbackMigration_RemovesLatest(t *testing.T) {
 
 	if len(after) != len(before)-1 {
 		t.Errorf("after rollback: len(versions) = %d, want %d", len(after), len(before)-1)
+	}
+}
+
+// TestQueueTableSchema_HasPositionColumn asserts that the queue table has a
+// position column (and accepts integer mtime values) after all migrations run.
+func TestQueueTableSchema_HasPositionColumn(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(context.Background(), filepath.Join(dir, "db.sqlite"), nil)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.db.ExecContext(context.Background(),
+		`INSERT INTO queue (file_path, mtime, position, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"/notes/foo.md", int64(1704067200000), int64(1), "pending", int64(1704067200000), int64(1704067200000),
+	)
+	if err != nil {
+		t.Errorf("insert into queue with position column: %v", err)
+	}
+}
+
+// TestQueueTableSchema_DeduplicationIndex asserts the partial unique index on
+// (file_path) WHERE status = 'pending' exists and enforces deduplication.
+func TestQueueTableSchema_DeduplicationIndex(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(context.Background(), filepath.Join(dir, "db.sqlite"), nil)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	// Insert first pending row — should succeed.
+	_, err = s.db.ExecContext(context.Background(),
+		`INSERT INTO queue (file_path, mtime, position, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"/notes/foo.md", int64(1), int64(1), "pending", int64(1), int64(1),
+	)
+	if err != nil {
+		t.Fatalf("first insert: %v", err)
+	}
+
+	// Insert second pending row for the same path — must fail (unique constraint).
+	_, err = s.db.ExecContext(context.Background(),
+		`INSERT INTO queue (file_path, mtime, position, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"/notes/foo.md", int64(2), int64(2), "pending", int64(2), int64(2),
+	)
+	if err == nil {
+		t.Error("expected unique constraint violation for duplicate pending path, got nil")
+	}
+}
+
+// TestQueueTableSchema_StatusPositionIndex asserts the (status, position) index exists.
+func TestQueueTableSchema_StatusPositionIndex(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(context.Background(), filepath.Join(dir, "db.sqlite"), nil)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer s.Close()
+
+	var name string
+	err = s.db.QueryRowContext(context.Background(),
+		`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_queue_status_position'`,
+	).Scan(&name)
+	if err != nil {
+		t.Errorf("index idx_queue_status_position not found: %v", err)
 	}
 }
 
