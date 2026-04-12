@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -56,6 +57,10 @@ type Config struct {
 	// IndexCachePath overrides the default SQLite cache path for the note index.
 	// Defaults to <workspace>/.annotate/index_cache.sqlite when empty.
 	IndexCachePath string `yaml:"index_cache_path"`
+
+	// SocketPath is the Unix domain socket path used for IPC between CLI commands
+	// and the running daemon. Defaults to ~/.annotate/annotate.sock when empty.
+	SocketPath string `yaml:"socket_path"`
 }
 
 // NamespaceOverride holds per-namespace policy overrides stored in the config
@@ -144,6 +149,11 @@ func applyDefaults(c *Config) {
 	}
 	if c.EventLogRetention == 0 {
 		c.EventLogRetention = Duration(DefaultEventLogRetention)
+	}
+	if c.SocketPath == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			c.SocketPath = filepath.Join(home, ".annotate", "annotate.sock")
+		}
 	}
 }
 
