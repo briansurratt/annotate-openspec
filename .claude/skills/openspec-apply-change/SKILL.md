@@ -66,10 +66,25 @@ Implement tasks from an OpenSpec change.
 
 6. **Implement tasks (loop until done or blocked)**
 
-   For each pending task:
-   - Show which task is being worked on
-   - Make the code changes required
-   - Keep changes minimal and focused
+   Follow the **red → green → refactor** TDD cycle for every feature task:
+
+   **Red phase** — Write the test before the production code:
+   - Write the test(s) for the task
+   - Run the targeted tests and confirm the new test *fails*
+   - Verify the failure is for the right reason (missing function, wrong behavior — not a compile error in the test or a misconfigured fixture)
+   - If the test passes without any production code, stop — the test is wrong or the feature is already implemented
+
+   **Green phase** — Write the minimum code to make the test pass:
+   - Implement only what is needed to satisfy the failing test
+   - Run the full test suite (`go test ./...`) and confirm all tests pass
+   - Do not move on while any test is red
+
+   **Refactor phase** — Clean up (only if needed):
+   - Improve names, remove duplication, simplify logic
+   - Run the full test suite after each refactor step
+   - All tests must remain green throughout
+
+   Then:
    - Mark task complete in the tasks file: `- [ ]` → `- [x]`
    - Continue to next task
 
@@ -77,6 +92,7 @@ Implement tasks from an OpenSpec change.
    - Task is unclear → ask for clarification
    - Implementation reveals a design issue → suggest updating artifacts
    - Error or blocker encountered → report and wait for guidance
+   - The red phase cannot be achieved (new test unexpectedly passes) → investigate before continuing
    - User interrupts
 
 7. **On completion or pause, show status**
@@ -141,6 +157,9 @@ What would you like to do?
 **Guardrails**
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
+- Follow red → green → refactor for every feature task — never skip the red phase
+- Confirm the new test fails before writing production code; if it doesn't fail, stop and investigate
+- Run the full test suite (`go test ./...`) after each green and refactor phase before moving to the next task
 - If task is ambiguous, pause and ask before implementing
 - If implementation reveals issues, pause and suggest artifact updates
 - Keep code changes minimal and scoped to each task

@@ -89,6 +89,39 @@ func (p *Provider) Suggest(ctx context.Context, prompt string) (*ProviderOutput,
 
 ## Testing
 
+### Test-Driven Development (Red → Green → Refactor)
+
+All new features and bug fixes follow TDD. The cycle is mandatory, not optional:
+
+1. **Red** — Write the test first. Run the suite and confirm the new test fails. Verify it fails *for the right reason* (missing function, wrong behavior — not a compile error in the test itself or a misconfigured fixture).
+2. **Green** — Write the minimum production code needed to make the failing test pass. Run the full suite; all tests must be green before moving on.
+3. **Refactor** — Clean up duplication, improve names, simplify logic. Run the suite after every non-trivial refactor step to confirm nothing regressed.
+
+**Plan and tasks must reflect this order.** A task list for a feature should have the test task appear *before* the implementation task:
+
+```
+- [ ] 1. Write tests for Foo (expect red)
+- [ ] 2. Implement Foo (expect green)
+- [ ] 3. Refactor Foo if needed (expect green throughout)
+```
+
+**Verification steps are part of the work.** Each phase ends with running the tests:
+
+```bash
+# After writing the test (should see FAIL):
+go test ./internal/foo/... -run TestFoo -v
+
+# After implementing (full suite must pass):
+go test ./...
+
+# After each refactor step:
+go test ./...
+```
+
+Never skip the red phase. If a newly written test passes without any production code change, the test is either testing something already implemented or is incorrectly written — stop and investigate before continuing.
+
+### Test Style
+
 - Test files: `*_test.go` in the same package
 - Table-driven tests for multiple scenarios
 - Test functions: `TestFunctionName(t *testing.T)`
@@ -320,6 +353,10 @@ Avoid adding dependencies without discussion; prefer standard library solutions.
 ## Code Review Checklist
 
 Before submitting code:
+- [ ] Tests were written *before* the production code (TDD red-green-refactor cycle followed)
+- [ ] New test was confirmed to fail before implementation (red phase verified)
+- [ ] Full test suite passes after implementation (green phase verified)
+- [ ] Refactoring steps kept the suite green throughout
 - [ ] Follows naming conventions
 - [ ] All errors are handled explicitly
 - [ ] Functions have appropriate comments
