@@ -295,6 +295,160 @@ func TestRemove_NonExistentIDReturnsError(t *testing.T) {
 	}
 }
 
+// --- Integration tests ---
+
+// TestIntegration_FIFOCycle verifies the full FIFO lifecycle:
+// enqueue A, enqueue B, dequeue (gets A), remove A, dequeue (gets B), remove B,
+// then the queue is empty.
+func TestIntegration_FIFOCycle(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.Enqueue("/notes/a.md", 100); err != nil {
+		t.Fatalf("Enqueue a: %v", err)
+	}
+	if err := q.Enqueue("/notes/b.md", 200); err != nil {
+		t.Fatalf("Enqueue b: %v", err)
+	}
+
+	first, err := q.Dequeue()
+	if err != nil || first == nil {
+		t.Fatalf("first Dequeue: err=%v entry=%v", err, first)
+	}
+	if first.FilePath != "/notes/a.md" {
+		t.Errorf("expected a.md first, got %q", first.FilePath)
+	}
+	if err := q.Remove(first.ID); err != nil {
+		t.Fatalf("Remove a: %v", err)
+	}
+
+	second, err := q.Dequeue()
+	if err != nil || second == nil {
+		t.Fatalf("second Dequeue: err=%v entry=%v", err, second)
+	}
+	if second.FilePath != "/notes/b.md" {
+		t.Errorf("expected b.md second, got %q", second.FilePath)
+	}
+	if err := q.Remove(second.ID); err != nil {
+		t.Fatalf("Remove b: %v", err)
+	}
+
+	empty, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("Dequeue on empty: %v", err)
+	}
+	if empty != nil {
+		t.Errorf("expected nil on empty queue, got %+v", empty)
+	}
+}
+
+// TestIntegration_Dedup verifies that enqueueing the same path twice results
+// in a single row with the updated mtime, and dequeuing returns it exactly once.
+func TestIntegration_Dedup(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.Enqueue("/notes/x.md", 1000); err != nil {
+		t.Fatalf("first Enqueue: %v", err)
+	}
+	if err := q.Enqueue("/notes/x.md", 2000); err != nil {
+		t.Fatalf("second Enqueue: %v", err)
+	}
+
+	var total int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM queue`).Scan(&total); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 row after dedup, got %d", total)
+	}
+
+	entry, err := q.Dequeue()
+	if err != nil || entry == nil {
+		t.Fatalf("Dequeue: err=%v entry=%v", err, entry)
+	}
+	if entry.Mtime != 2000 {
+		t.Errorf("expected updated mtime=2000, got %d", entry.Mtime)
+	}
+	if err := q.Remove(entry.ID); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	// Queue should be empty.
+	empty, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("Dequeue on empty: %v", err)
+	}
+	if empty != nil {
+		t.Errorf("expected nil on empty queue, got %+v", empty)
+	}
+}
+
+// TestIntegration_ConflictCycle verifies the conflict path:
+// enqueue, dequeue (marks processing), re-enqueue (back of queue), dequeue again.
+func TestIntegration_ConflictCycle(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	// Enqueue two paths so we can verify the re-enqueued entry ends up last.
+	if err := q.Enqueue("/notes/a.md", 100); err != nil {
+		t.Fatalf("Enqueue a: %v", err)
+	}
+	if err := q.Enqueue("/notes/b.md", 200); err != nil {
+		t.Fatalf("Enqueue b: %v", err)
+	}
+
+	// Dequeue a — it becomes processing.
+	entryA, err := q.Dequeue()
+	if err != nil || entryA == nil {
+		t.Fatalf("Dequeue a: err=%v entry=%v", err, entryA)
+	}
+	if entryA.FilePath != "/notes/a.md" {
+		t.Errorf("expected a.md, got %q", entryA.FilePath)
+	}
+
+	// Re-enqueue a — pushes it to the back behind b.
+	if err := q.ReEnqueue(entryA.ID); err != nil {
+		t.Fatalf("ReEnqueue: %v", err)
+	}
+
+	// Dequeue again — should get b (the older pending entry).
+	entryB, err := q.Dequeue()
+	if err != nil || entryB == nil {
+		t.Fatalf("second Dequeue: err=%v entry=%v", err, entryB)
+	}
+	if entryB.FilePath != "/notes/b.md" {
+		t.Errorf("expected b.md next, got %q", entryB.FilePath)
+	}
+
+	// Dequeue once more — should get a (re-enqueued at back).
+	entryA2, err := q.Dequeue()
+	if err != nil || entryA2 == nil {
+		t.Fatalf("third Dequeue: err=%v entry=%v", err, entryA2)
+	}
+	if entryA2.FilePath != "/notes/a.md" {
+		t.Errorf("expected a.md at back, got %q", entryA2.FilePath)
+	}
+}
+
 // TestEnqueue_ProcessingPathInsertsNewRow asserts that enqueueing a path whose
 // existing row is 'processing' inserts a fresh 'pending' row alongside it.
 func TestEnqueue_ProcessingPathInsertsNewRow(t *testing.T) {
