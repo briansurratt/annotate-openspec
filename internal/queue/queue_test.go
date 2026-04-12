@@ -118,6 +118,70 @@ func TestEnqueue_DuplicatePending(t *testing.T) {
 	}
 }
 
+// TestDequeue_ReturnsFrontEntryAndMarksProcessing asserts that Dequeue returns
+// the oldest pending entry and updates its status to 'processing'.
+func TestDequeue_ReturnsFrontEntryAndMarksProcessing(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.Enqueue("/notes/a.md", 1000); err != nil {
+		t.Fatalf("Enqueue a: %v", err)
+	}
+	if err := q.Enqueue("/notes/b.md", 2000); err != nil {
+		t.Fatalf("Enqueue b: %v", err)
+	}
+
+	entry, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("Dequeue: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("Dequeue returned nil entry, expected /notes/a.md")
+	}
+	if entry.FilePath != "/notes/a.md" {
+		t.Errorf("expected FilePath=/notes/a.md, got %q", entry.FilePath)
+	}
+	if entry.Mtime != 1000 {
+		t.Errorf("expected Mtime=1000, got %d", entry.Mtime)
+	}
+
+	// The dequeued entry must now be 'processing'.
+	if n := rowCount(t, s, "processing"); n != 1 {
+		t.Errorf("expected 1 processing row, got %d", n)
+	}
+	// The second entry must still be pending.
+	if n := rowCount(t, s, "pending"); n != 1 {
+		t.Errorf("expected 1 pending row, got %d", n)
+	}
+}
+
+// TestDequeue_EmptyQueueReturnsNil asserts that Dequeue returns nil, nil when
+// no pending rows exist.
+func TestDequeue_EmptyQueueReturnsNil(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	entry, err := q.Dequeue()
+	if err != nil {
+		t.Fatalf("Dequeue on empty queue error: %v", err)
+	}
+	if entry != nil {
+		t.Errorf("expected nil entry on empty queue, got %+v", entry)
+	}
+}
+
 // TestEnqueue_ProcessingPathInsertsNewRow asserts that enqueueing a path whose
 // existing row is 'processing' inserts a fresh 'pending' row alongside it.
 func TestEnqueue_ProcessingPathInsertsNewRow(t *testing.T) {

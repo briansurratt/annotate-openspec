@@ -103,6 +103,21 @@ func (q *Queue) Enqueue(path string, mtime int64) error {
 	return nil
 }
 
+// Dequeue returns the oldest pending entry and marks it as 'processing'.
+// Returns nil, nil when the queue has no pending entries.
+func (q *Queue) Dequeue() (*Entry, error) {
+	row := q.stmtDequeue.QueryRow()
+	e := &Entry{}
+	err := row.Scan(&e.ID, &e.FilePath, &e.Mtime)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("dequeue: %w", err)
+	}
+	return e, nil
+}
+
 // Close releases all prepared statements. It does not close the underlying DB.
 func (q *Queue) Close() {
 	q.stmtEnqueue.Close()
