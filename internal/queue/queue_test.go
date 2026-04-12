@@ -182,6 +182,70 @@ func TestDequeue_EmptyQueueReturnsNil(t *testing.T) {
 	}
 }
 
+// TestReEnqueue_MovesProcessingToPendingAtBack asserts that ReEnqueue sets the
+// row back to 'pending' and places it after all other rows.
+func TestReEnqueue_MovesProcessingToPendingAtBack(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	// Enqueue two paths then dequeue the first.
+	if err := q.Enqueue("/notes/a.md", 1000); err != nil {
+		t.Fatalf("Enqueue a: %v", err)
+	}
+	if err := q.Enqueue("/notes/b.md", 2000); err != nil {
+		t.Fatalf("Enqueue b: %v", err)
+	}
+	entry, err := q.Dequeue()
+	if err != nil || entry == nil {
+		t.Fatalf("Dequeue: err=%v entry=%v", err, entry)
+	}
+
+	// Re-enqueue the processing entry.
+	if err := q.ReEnqueue(entry.ID); err != nil {
+		t.Fatalf("ReEnqueue: %v", err)
+	}
+
+	// Both rows should now be pending.
+	if n := rowCount(t, s, "pending"); n != 2 {
+		t.Errorf("expected 2 pending rows, got %d", n)
+	}
+	if n := rowCount(t, s, "processing"); n != 0 {
+		t.Errorf("expected 0 processing rows, got %d", n)
+	}
+
+	// The re-enqueued entry should come back last (after /notes/b.md).
+	first, err := q.Dequeue()
+	if err != nil || first == nil {
+		t.Fatalf("first Dequeue after re-enqueue: err=%v entry=%v", err, first)
+	}
+	if first.FilePath != "/notes/b.md" {
+		t.Errorf("expected /notes/b.md first, got %q", first.FilePath)
+	}
+}
+
+// TestReEnqueue_NonExistentIDReturnsError asserts that ReEnqueue returns an
+// error when no row with the given ID exists.
+func TestReEnqueue_NonExistentIDReturnsError(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.ReEnqueue(999); err == nil {
+		t.Error("expected error for non-existent ID, got nil")
+	}
+}
+
 // TestEnqueue_ProcessingPathInsertsNewRow asserts that enqueueing a path whose
 // existing row is 'processing' inserts a fresh 'pending' row alongside it.
 func TestEnqueue_ProcessingPathInsertsNewRow(t *testing.T) {

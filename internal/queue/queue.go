@@ -118,6 +118,23 @@ func (q *Queue) Dequeue() (*Entry, error) {
 	return e, nil
 }
 
+// ReEnqueue moves a processing row back to pending at the back of the queue.
+// Returns an error if no row with the given ID exists.
+func (q *Queue) ReEnqueue(id int64) error {
+	res, err := q.stmtReEnqueue.Exec(id)
+	if err != nil {
+		return fmt.Errorf("re-enqueue id=%d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("re-enqueue rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("re-enqueue: no row with id=%d", id)
+	}
+	return nil
+}
+
 // Close releases all prepared statements. It does not close the underlying DB.
 func (q *Queue) Close() {
 	q.stmtEnqueue.Close()
