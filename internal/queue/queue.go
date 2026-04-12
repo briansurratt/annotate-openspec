@@ -7,6 +7,7 @@ package queue
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 const (
@@ -87,6 +88,19 @@ func New(db *sql.DB) (*Queue, error) {
 	}
 
 	return q, nil
+}
+
+// Enqueue adds path to the queue with the given mtime. If the path already has
+// a pending row the existing row's mtime is updated in place (dedup); its
+// position is preserved so FIFO ordering is maintained. A path whose row is
+// currently 'processing' gets a fresh pending row inserted alongside it.
+func (q *Queue) Enqueue(path string, mtime int64) error {
+	now := time.Now().UTC().UnixMilli()
+	_, err := q.stmtEnqueue.Exec(path, mtime, now, now)
+	if err != nil {
+		return fmt.Errorf("enqueue %q: %w", path, err)
+	}
+	return nil
 }
 
 // Close releases all prepared statements. It does not close the underlying DB.
