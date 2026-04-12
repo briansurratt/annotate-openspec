@@ -135,6 +135,23 @@ func (q *Queue) ReEnqueue(id int64) error {
 	return nil
 }
 
+// Remove deletes the queue entry with the given ID after successful processing.
+// Returns an error if no row with the given ID exists.
+func (q *Queue) Remove(id int64) error {
+	res, err := q.stmtRemove.Exec(id)
+	if err != nil {
+		return fmt.Errorf("remove id=%d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("remove rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("remove: no row with id=%d", id)
+	}
+	return nil
+}
+
 // Close releases all prepared statements. It does not close the underlying DB.
 func (q *Queue) Close() {
 	q.stmtEnqueue.Close()

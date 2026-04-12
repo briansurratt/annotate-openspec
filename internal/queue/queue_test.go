@@ -246,6 +246,55 @@ func TestReEnqueue_NonExistentIDReturnsError(t *testing.T) {
 	}
 }
 
+// TestRemove_DeletesExistingRow asserts that Remove deletes the row with the given ID.
+func TestRemove_DeletesExistingRow(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.Enqueue("/notes/a.md", 1000); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	entry, err := q.Dequeue()
+	if err != nil || entry == nil {
+		t.Fatalf("Dequeue: err=%v entry=%v", err, entry)
+	}
+
+	if err := q.Remove(entry.ID); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	var n int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM queue`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 rows after remove, got %d", n)
+	}
+}
+
+// TestRemove_NonExistentIDReturnsError asserts that Remove returns an error
+// when no row with the given ID exists.
+func TestRemove_NonExistentIDReturnsError(t *testing.T) {
+	s, cleanup := openTestDB(t)
+	defer cleanup()
+
+	q, err := New(s.DB())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	if err := q.Remove(999); err == nil {
+		t.Error("expected error for non-existent ID, got nil")
+	}
+}
+
 // TestEnqueue_ProcessingPathInsertsNewRow asserts that enqueueing a path whose
 // existing row is 'processing' inserts a fresh 'pending' row alongside it.
 func TestEnqueue_ProcessingPathInsertsNewRow(t *testing.T) {
