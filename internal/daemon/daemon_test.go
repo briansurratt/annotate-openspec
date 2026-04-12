@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +88,59 @@ func startDaemon(t *testing.T, d *Daemon) (cancel context.CancelFunc, done <-cha
 		<-ch
 	})
 	return cancel, ch
+}
+
+// ─── Section 1: /enqueue HTTP handler ───────────────────────────────────────
+
+func TestEnqueueEndpoint_Returns200AndEnqueuesPath(t *testing.T) {
+	cfg := defaultConfig(t)
+	d, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	cancel, _ := startDaemon(t, d)
+	defer cancel()
+
+	// Wait for socket to appear.
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, statErr := os.Stat(cfg.SocketPath); statErr == nil {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", cfg.SocketPath)
+			},
+		},
+	}
+
+	filePath := "/notes/enqueued-via-http.md"
+	resp, err := client.Post("http://unix/enqueue", "text/plain", strings.NewReader(filePath))
+	if err != nil {
+		t.Fatalf("POST /enqueue: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("POST /enqueue status = %d, want 200", resp.StatusCode)
+	}
+
+	// Verify an 'enqueued' event was logged for the path.
+	time.Sleep(50 * time.Millisecond)
+	var count int
+	if err := cfg.DB.QueryRow(
+		`SELECT COUNT(*) FROM event_log WHERE event_type = 'enqueued' AND file_path = ?`, filePath,
+	).Scan(&count); err != nil {
+		t.Fatalf("query event_log: %v", err)
+	}
+	if count == 0 {
+		t.Errorf("no 'enqueued' event_log entry for %s after POST /enqueue", filePath)
+	}
 }
 
 // ─── Section 2: daemon.New ──────────────────────────────────────────────────

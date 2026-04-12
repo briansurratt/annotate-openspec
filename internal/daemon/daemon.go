@@ -11,10 +11,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,6 +145,7 @@ func (d *Daemon) httpServer(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", handleStatus)
+	mux.HandleFunc("/enqueue", d.handleEnqueue)
 
 	srv := &http.Server{Handler: mux}
 
@@ -158,6 +161,29 @@ func (d *Daemon) httpServer(ctx context.Context) error {
 		return fmt.Errorf("httpServer: serve: %w", err)
 	}
 	return nil
+}
+
+// handleEnqueue handles POST /enqueue. It reads the file path from the request
+// body, calls queue.Enqueue, logs an enqueued event, and responds with HTTP 200.
+func (d *Daemon) handleEnqueue(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body", http.StatusBadRequest)
+		return
+	}
+	filePath := strings.TrimSpace(string(body))
+	if filePath == "" {
+		http.Error(w, "empty file path", http.StatusBadRequest)
+		return
+	}
+
+	mtime := time.Now().UTC().UnixMilli()
+	if err := d.cfg.Queue.Enqueue(filePath, mtime); err != nil {
+		http.Error(w, "enqueue failed", http.StatusInternalServerError)
+		return
+	}
+	_ = eventlog.Append(d.cfg.DB, eventlog.EventEnqueued, filePath, nil)
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleStatus responds to GET /status with {"status":"ok"}.
