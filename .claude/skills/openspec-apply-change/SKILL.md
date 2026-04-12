@@ -84,9 +84,11 @@ Implement tasks from an OpenSpec change.
    - Run the full test suite after each refactor step
    - All tests must remain green throughout
 
-   Then:
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
-   - Continue to next task
+   **Complete the task:**
+   1. Mark task complete in the tasks file: `- [ ]` → `- [x]`
+   2. Stage all changed files and the updated tasks.md: `git add -p` (or by name — never `git add .` blindly)
+   3. Commit with a brief summary message: `git commit -m "<change-name>: <one-line summary of what this task did>"`
+   4. Continue to next task
 
    **Pause if:**
    - Task is unclear → ask for clarification
@@ -163,7 +165,9 @@ What would you like to do?
 - If task is ambiguous, pause and ask before implementing
 - If implementation reveals issues, pause and suggest artifact updates
 - Keep code changes minimal and scoped to each task
-- Update task checkbox immediately after completing each task
+- After each task: mark checkbox, then commit (task checkpoint + code in one commit)
+- Commit message format: `<change-name>: <brief summary>` — never a generic message like "wip" or "task done"
+- Include the updated tasks.md in the same commit as the code it tracks
 - Pause on errors, blockers, or unclear requirements - don't guess
 - Use contextFiles from CLI output, don't assume specific file names
 
