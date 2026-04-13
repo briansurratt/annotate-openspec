@@ -9,7 +9,7 @@
 - [x] 2.1 Create `cmd/annotate/` directory and `main.go` with cobra root command; add `--config` flag defaulting to `~/.annotate/config.yaml`
 - [x] 2.2 Write test: `annotate --help` output includes all six subcommand names
 - [x] 2.3 Write test: unknown subcommand exits non-zero
-- [ ] 2.4 Commit: `feat(cmd): scaffold cobra root command`
+- [x] 2.4 Commit: `feat(cmd): scaffold cobra root command`
 
 ## 3. daemon subcommand
 
